@@ -141,9 +141,10 @@ export async function handleChatCore({ body, modelInfo, credentials, log, onCred
   const preTranslateRtkLine = formatRtkLog(preTranslateRtk);
   if (preTranslateRtkLine) console.log(preTranslateRtkLine);
 
-  const clientRequestedStreaming = body.stream === true || sourceFormat === FORMATS.ANTIGRAVITY || sourceFormat === FORMATS.GEMINI || sourceFormat === FORMATS.GEMINI_CLI;
+  const isImplicitStreamSource = (sourceFormat === FORMATS.ANTIGRAVITY || sourceFormat === FORMATS.GEMINI || sourceFormat === FORMATS.GEMINI_CLI) && body.stream !== false;
+  const clientRequestedStreaming = body.stream === true || isImplicitStreamSource;
   const providerRequiresStreaming = PROVIDERS[provider]?.forceStream === true;
-  let stream = providerRequiresStreaming ? true : (body.stream !== false);
+  let stream = providerRequiresStreaming ? true : clientRequestedStreaming;
 
   // Image generation models require non-streaming (Google v1internal:generateContent)
   const modelType = getModelType(alias, model);
@@ -526,8 +527,8 @@ export async function handleChatCore({ body, modelInfo, credentials, log, onCred
     if (result) { streamController.handleComplete(); return result; }
   }
 
-  // True non-streaming response
-  if (!stream) {
+  // True non-streaming response (also catches forceStream/passthrough providers that returned JSON when client did not request streaming)
+  if (!stream || !clientRequestedStreaming) {
     const result = await handleNonStreamingResponse({ ...sharedCtx, providerResponse, sourceFormat, targetFormat: providerResponseFormat, reqLogger, toolNameMap, customToolNames, trackDone, appendLog });
     streamController.handleComplete();
     return result;
